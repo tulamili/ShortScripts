@@ -1,0 +1,91 @@
+#! env perl
+use 5.018 ; 
+use warnings ; 
+use Getopt::Std ; 
+getopts '.2' , \my %o ; 
+
+my $ColonCode  = ! $o{2} ? 'S:' : 'D:' ; 
+
+my $RH ; 
+& preproc () ; 
+& core () ; 
+exit 0 ; 
+#no warnings qw[ when ] ;
+
+
+sub preproc () { 
+	pipe $RH, my $WH ; 
+	local $SIG{PIPE} = sub { die "spooler pipe broke" } ; # <-- もっと使いこなしてから
+	unless ( fork ) { 
+		close $RH ; 
+		if ( ! $o{'.'} ) { 
+			print {$WH} $_ while <> ; 
+		}
+		else {
+			local $/ ; 
+			$_ = <> ;
+			s/\n//g ; 
+			s/(?<=[.!])/\n\n/g ;
+			print {$WH} $_ ;
+		}
+		$WH -> flush ; # <-- 必要か?
+		exit ;
+	}
+	else { 
+		close $WH ; 
+	}
+}
+
+sub core { 
+	my $paraStartFlag = 1 ; 
+	while ( <$RH> ) {
+	  s/\r$// ;  # 改行がウィンドウズ形式の場合に対する対策
+	  chomp ; # 改行文字を除去
+	  s/\s+$// ; # 末尾の空白文字は除去。
+	  do { s/“/"/g ;  s/”/"/g } ; # 非アスキー文字のダブルクォーテーションをダブルクオーテーションにする。		
+      do{ s/‘/'/g ; s/’/'/g ; s/ˈ/'/g } ; # シングルクォーテーション	 	
+      do { s/–/-/g } ; # エンダッシュの処理 u+2013 
+      do { s/—/--/g } ; # ダッシュの処理 u+2014
+	  if ( /^$/) { 
+	  	$paraStartFlag = 1 ; 
+	  	next ;
+	  }
+	  my $headChars = $paraStartFlag ? $ColonCode : ' :' ; 
+	  say "$headChars$_" ; 
+	  $paraStartFlag = 0 ;
+	}
+}
+
+## ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+  use FindBin qw[ $Script ] ; 
+  $ARGV[1] //= '' ;
+  open my $FH , '<' , $0 ;
+  while(<$FH>){
+    s/\$0/$Script/g ;
+    print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+  }
+  close $FH ;
+  exit 0 ;
+}
+
+=encoding utf8
+
+=head1
+
+コマンド
+
+  $0 
+
+   入力からテキストを読取り、gtypist用の練習ファイル .typ に格納可能なデータを出力する。
+
+オプションに関して: 
+ 
+  -2 : gtypist での表示が、入力各行に対して出力2行、つまり空行が現れるようにする。
+  -. : ピリオドまたは!ごとに、gtypistで別々の画面表示になるようにする。
+
+開発メモ: 
+   * unixコマンドの fold -s を通した結果を出せるように、パイプなどを使ったopen を使ったプログラムとしたい。
+
+=cut
