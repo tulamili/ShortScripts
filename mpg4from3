@@ -2,22 +2,16 @@
 use 5.018 ; use strict ; use warnings ; 
 use feature qw[say] ;
 use Getopt::Std ; getopts 'd:ln', \my %o ; 
-#say glob "*.mp3" ; exit ;
 my @mp3files = grep { chomp ; $_ ne q[] } <*.mp3> ;
-
-#print "@mp3files" ; exit ;
-my $N = $o{n} ? "\\\n" : '' ;
+my $N = $o{n} ? "\\\n" : '' ; # 生成するコマンド文の途中に '\'の後に改行文字を、挿入するため。
 
 for ( @mp3files ) {
-
-	my $from = $_ ;
-	#$from =~ s/\ /\\ /g ;
-	s/[-]//g ; 
-	s/[_+ ]/_/g ; 
-	s/\.MP3$/.MP4/ ;
-	s/\.mp3$/.mp4/i ;
-	my $to = $_ ; 
-    #say "$from:$to" ;
+  my $from = $_ ;
+  s/[-]//g ; 
+  s/[_+ ]/_/g ; 
+  s/\.MP3$/.MP4/ ;
+  s/\.mp3$/.mp4/i ;
+  my $to = $_ ; 
   my $cmd = q[] ; 
   $cmd .= "time " ;
   $cmd .= qq[ffmpeg -loop 1 -i green.jpg -i "$from" $N] ; 
@@ -28,7 +22,7 @@ for ( @mp3files ) {
 
   say $cmd if ! $o{l} ; 
   say "$from\t-->\t$to" if $o{l} ;	
-  qx[$cmd] if ($o{d}//'') eq 'o' ;
+  qx[$cmd] if ($o{d}//'') eq 'o' ; # -do または -d o というオプションになっていたら、生成したコマンド文を実行する。
 }
 
 
@@ -58,13 +52,14 @@ sub HELP_MESSAGE {
 
  オプション :
 
+    -do  : 生成するコマンド文を、システム上で実行する。(単にコマンド文を見せるだけではない。)
     -l : 元のmp3ファイルがどう変換されるかを(TSV形式で)出力する。
     -n : コマンド文を視覚的に 分かりやすくするために、改行文字を途中に挿入する。
 
-
  注意 : 
+
    1. このコマンドは システムに ffmpeg がインストールされていることを前提とする。OSXなら brew intall ffmpeg 実行するなどすること。
    2. green.jpg という、縦と横の画素数が偶数の画像の用意が必要である。
-   
+
 =cut
 
