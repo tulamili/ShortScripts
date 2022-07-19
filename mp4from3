@@ -2,21 +2,22 @@
 use 5.018 ; use strict ; use warnings ; 
 use feature qw[say] ;
 use File::Temp ; 
-use Getopt::Std ; getopts 'a:d:g:ln1D', \my %o ; 
+use Getopt::Std ; 
+getopts 'a:d:g:lny1D', \my %o ; 
 use Term::ANSIColor qw[uncolor colorstrip :constants] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Time::HiRes qw[gettimeofday tv_interval] ; 
 my $time_start = [ gettimeofday ] ; 
 
-END {
-  my $elapsed = sprintf "%0.4f" , tv_interval ( $time_start , [ gettimeofday ] ) ;
-  say STDERR BLUE BOLD "--- $elapsed seconds has spent." ;
-}
-my @tgt = @ARGV ? @ARGV : grep { m/mp.$/i } @{[glob $o{D}? '*4' : '*3']} ; # targetを略したつもり
+#say "@ARGV" ; exit ;
+my @tgt = grep { $o{D} ? m/mp4$/i : m/mp3$/i } ( @ARGV ? @ARGV : glob '*' ) ;
 my $N = $o{n} ? "\\\n" : '' ; # 生成するコマンド文の途中に '\'の後に改行文字を、挿入するため。
 
-# 一時ファイルである 2x2 の画像ファイル のjpg形式ファイルを作る。
-my $image = $o{g} // do { my $t = File::Temp -> new ( UNLINK => 1 , suffix => '.jpg') ;
-our $trs = q[ffd8ffe000104a46494600010100000100010000ffed003850686f746f73
+my $filetmp ; 
+# 一時ファイルである 4x4 の画像ファイル のjpg形式ファイルを作る。
+if ( ! defined $o{g} ) 
+{ 
+$filetmp = File::Temp -> new ( UNLINK => 1 , suffix => '.jpg') ;
+my $trs = q[ffd8ffe000104a46494600010100000100010000ffed003850686f746f73
    686f7020332e30003842494d04040000000000003842494d0425000000000010d41d8
    cd98f00b204e9800998ecf8427effe202204943435f50524f46494c45000101000002
    106170706c040000006d6e74725247422058595a2007e600070005000e001c0021616
@@ -42,13 +43,22 @@ our $trs = q[ffd8ffe000104a46494600010100000100010000ffed003850686f746f73
    0000000000000000000000000009ffc40014100100000000000000000000000000000
    000ffc40014010100000000000000000000000000000004ffc4001411010000000000
    0000000000000000000000ffda000c03010002110311003f0043481dffd9] ; 
-   print {$t} pack 'H*', $trs =~ s/\n//gr ; $t 
- } ;
- $image = ITALIC BOLD $image ;
+   print {$filetmp} pack 'H*', $trs =~ s/[ \t\n]//gr 
+} # ; $t #; close $t  ;$t 
+ 
+my $image = $o{g} // $filetmp ; #do 
+$image = ITALIC BOLD $image ;
+
+END {
+  #unlink $image if ! defined $o{g} ; 
+  my $elapsed = sprintf "%0.4f" , tv_interval ( $time_start , [ gettimeofday ] ) ;
+  say STDERR BLUE BOLD "--- $elapsed seconds has spent." ;
+}
+
 
 for ( @tgt  ) {
   my ($cmd, $from, $to)  = ( q[] , undef, undef )  ;
-  if ( $o{D} ) { $cmd = qq [ rm $_ ] }
+  if ( $o{D} ) { $cmd = RED BOLD qq [ rm $_ ] }
   else { 
     $from = BOLD $_ ;
     s/[-]//g ; 
@@ -66,12 +76,19 @@ for ( @tgt  ) {
   $cmd = colorstrip $cmd if $o{1} ;  # <-- トリッキーかも。 colorstrip と uncolor の違いが気になり中。
   say $cmd if ! $o{l} ; 
   say "$from\t-->\t$to" if ! $o{D} && $o{l} ;	
-  $cmd = colorstrip $cmd ;  # <-- トリッキーかも。  
-  qx[$cmd] if ($o{d}//'') eq 'o' ; # -do または -d o というオプションになっていたら、生成したコマンド文を実行する。
+  my $yN = $o{y} ? 'y' : 'N' ;
+  $cmd = $o{y} ? ' yes $yN | ' . colorstrip $cmd : colorstrip $cmd ;  # <-- トリッキーかも。  # *5 
+  if ( ($o{d}//'') eq 'o' ){ 
+    qx[$cmd] ; 
+    $cmd = colorstrip "ls -l $from $to" ;
+    say YELLOW $cmd ;
+    system qq[$cmd] ;
+  } ; # -do または -d o というオプションになっていたら、生成したコマンド文を実行する。
 }
 
 
-say STDERR BOLD CYAN "-- In order to actually run the convert program, do as `$0 @ARGV -do '" unless ($o{d}//'') eq 'o' ; 
+#say STDERR BOLD CYAN "-- In order to actually run the convert program, do as `$0 -do @ARGV '" unless ($o{d}//'') eq 'o' ; 
+say STDERR BOLD CYAN "-- In order to actually run the convert program, do as `$0 -do ...'" unless ($o{d}//'') eq 'o' ; 
 
 ## ヘルプの扱い
 sub VERSION_MESSAGE {}
@@ -97,7 +114,8 @@ sub HELP_MESSAGE {
     -do などのオプション無しだとコマンド文を出力することをだけをして完了する。
     このコマンドを実行すると、ファイル名を引数として指定しない限り、
     そのディレクトリ(カレントディレクトリ)に含まれている拡張子が.mp3のファイルを全て使う。
-    -g FILE で画像ファイルを指定しない場合、2x2の灰色の静止画を、映像として使用する。
+    -g FILE で画像ファイルを指定しない場合、4x4の灰色の静止画を、映像として使用する。
+    変換したmp4形式のファイル名は、YouTubeでアップロードができるように、ファイル名中のハイフンとアンダースコアと空白文字とが除去される。
 
 
  オプション :
@@ -106,9 +124,11 @@ sub HELP_MESSAGE {
     -g FILE : 静止画のファイル。縦の長さも横の長さも偶数である必要がある。jpgとpngで動作する。(graphic)
     -l : 元のmp3ファイルがどう変換されるかを(TSV形式で)出力する。(list)
     -n : コマンド文を視覚的に 分かりやすくするために、改行文字を途中に挿入して、元々長いコマンド文の出力の横幅を狭くする。
+    -y : 上書きを許す。(この指定が無い場合、mp3からmp4に変換した際に、ファイルを書き込むときに、途中で止まることになる。)
 
     -1 : コマンド文の出力に色の加工をしない。(太字やイタリック体にする加工をしなくなる。)
     -D : 上書きされるはずのファイルの削除。ファイル名を指定しないと、そのディレクトリの*.mp3を対象にする。(Delete)
+
 
     --help :  オンラインヘルプマニュアルを表示する。(この画面と同じである。)
 
@@ -116,6 +136,9 @@ sub HELP_MESSAGE {
 
    * このコマンドは システムに ffmpeg がインストールされていることを前提とする。OSXなら brew intall ffmpeg 実行するなどすること。
    * ffmpeg が上書きするかどうか聞いてくるかもしれない。その場合は、mp4from3 -D を試すのが良い。もっともプリミティブな方法は、そのmp4ファイルを手で消すこと。
+   * 画像ファイルをいろいろコマンドラインで操作する場合は、ImageMagickが便利であろう。
+   * -do 無しだと、実際は実行されないコマンド文が出力されるが、その中に画像の一時ファイルの名前が含まれる場合がある。そのファイルはすぐ消される。
+   * -y のあるなしにより、yes y | ...  を利用している。yes N | ffmpeg .. が意図通りに動作はしてなかった。 (*5) 
 
  
  作成メモ : 
