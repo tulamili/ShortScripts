@@ -1,0 +1,57 @@
+#!/usr/bin/perl
+use 5.018 ; use strict ; use warnings ; 
+use feature qw[say] ;
+use File::Temp ; 
+use Getopt::Std ; 
+getopts 't:', \my %o ; 
+use Term::ANSIColor qw[uncolor colorstrip :constants] ; $Term::ANSIColor::AUTORESET = 1 ;
+use Time::HiRes qw[gettimeofday tv_interval] ; 
+my $time_start = [ gettimeofday ] ; 
+
+$o{t} //= 'H*' ;
+open my $FH , '<' , $ARGV[0] ; 
+$/ = undef ; 
+my $ctt = <> ; 
+my @dc = unpack $o{t} , $ctt ; 
+say "@dc" ;
+exit 0 ;
+
+
+## ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+  use FindBin qw[ $Script ] ; 
+  $ARGV[1] //= '' ;
+  open my $FH , '<' , $0 ;
+  while(<$FH>){
+    s/\$0/$Script/g ;
+    print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+  }
+  close $FH ;
+  exit 0 ;
+}
+
+=encoding utf8
+
+=head1 
+
+binarypack FILE
+
+  FILE を読み取り、それをPerl言語の unpack で変換した文字列を標準出力に出力する。
+   (出力した文字列を pack で変換することで元に戻せる。バイナリをH*で16進に変換して、元に戻すのに使う。)
+
+オプション :
+  
+  -t TEMPLATE : Perl の unpack 関数に与えるtemplate を指定。未指定なら 'H*'。
+
+
+メモ : 
+  'H*' でなくて 'h*' なら下位バイトが先に来る。
+  'B*' で0/1の2進数になる。
+  'U*' と 'C*' でテキストを入力すると各文字が10進数に変換される。
+  pack 関数やunpack関数の使い方を、広く理解するのに重宝するかもしれない。
+  https://perldoc.jp/docs/perl/5.36.0/perlpacktut.pod を参照するとさらに理解がすすかもしれない。
+  
+
+=cut
+
